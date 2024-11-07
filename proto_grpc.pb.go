@@ -28,7 +28,7 @@ const (
 //
 // Interface exposed by the client
 type ClientClient interface {
-	PassAlong(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ClientMessage, Empty], error)
+	PassAlong(ctx context.Context, in *ClientMessage, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type clientClient struct {
@@ -39,18 +39,15 @@ func NewClientClient(cc grpc.ClientConnInterface) ClientClient {
 	return &clientClient{cc}
 }
 
-func (c *clientClient) PassAlong(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ClientMessage, Empty], error) {
+func (c *clientClient) PassAlong(ctx context.Context, in *ClientMessage, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Client_ServiceDesc.Streams[0], Client_PassAlong_FullMethodName, cOpts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Client_PassAlong_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[ClientMessage, Empty]{ClientStream: stream}
-	return x, nil
+	return out, nil
 }
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Client_PassAlongClient = grpc.ClientStreamingClient[ClientMessage, Empty]
 
 // ClientServer is the server API for Client service.
 // All implementations must embed UnimplementedClientServer
@@ -58,7 +55,7 @@ type Client_PassAlongClient = grpc.ClientStreamingClient[ClientMessage, Empty]
 //
 // Interface exposed by the client
 type ClientServer interface {
-	PassAlong(grpc.ClientStreamingServer[ClientMessage, Empty]) error
+	PassAlong(context.Context, *ClientMessage) (*Empty, error)
 	mustEmbedUnimplementedClientServer()
 }
 
@@ -69,8 +66,8 @@ type ClientServer interface {
 // pointer dereference when methods are called.
 type UnimplementedClientServer struct{}
 
-func (UnimplementedClientServer) PassAlong(grpc.ClientStreamingServer[ClientMessage, Empty]) error {
-	return status.Errorf(codes.Unimplemented, "method PassAlong not implemented")
+func (UnimplementedClientServer) PassAlong(context.Context, *ClientMessage) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PassAlong not implemented")
 }
 func (UnimplementedClientServer) mustEmbedUnimplementedClientServer() {}
 func (UnimplementedClientServer) testEmbeddedByValue()                {}
@@ -93,12 +90,23 @@ func RegisterClientServer(s grpc.ServiceRegistrar, srv ClientServer) {
 	s.RegisterService(&Client_ServiceDesc, srv)
 }
 
-func _Client_PassAlong_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ClientServer).PassAlong(&grpc.GenericServerStream[ClientMessage, Empty]{ServerStream: stream})
+func _Client_PassAlong_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClientMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServer).PassAlong(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Client_PassAlong_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServer).PassAlong(ctx, req.(*ClientMessage))
+	}
+	return interceptor(ctx, in, info, handler)
 }
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Client_PassAlongServer = grpc.ClientStreamingServer[ClientMessage, Empty]
 
 // Client_ServiceDesc is the grpc.ServiceDesc for Client service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -106,13 +114,12 @@ type Client_PassAlongServer = grpc.ClientStreamingServer[ClientMessage, Empty]
 var Client_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "Client",
 	HandlerType: (*ClientServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
+	Methods: []grpc.MethodDesc{
 		{
-			StreamName:    "passAlong",
-			Handler:       _Client_PassAlong_Handler,
-			ClientStreams: true,
+			MethodName: "passAlong",
+			Handler:    _Client_PassAlong_Handler,
 		},
 	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "proto.proto",
 }

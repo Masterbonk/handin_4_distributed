@@ -10,5 +10,5 @@ message Empty {}
 
 // Interface exposed by the client
 service Client {
-    rpc passAlong (stream ClientMessage) returns (Empty) {};
+    rpc passAlong (ClientMessage) returns (Empty) {};
 }
