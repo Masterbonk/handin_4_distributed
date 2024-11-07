@@ -21,6 +21,8 @@ var targetPort string
 var queue []string
 var queueLock sync.Mutex
 
+var lastMsg string
+
 type server struct {
 	cc.UnimplementedClientServer
 	Msg string
@@ -38,9 +40,6 @@ func NewServer(startNode bool) *server {
 }
 
 func (s *server) PassAlong(ctx context.Context, clientMessage *cc.ClientMessage) (*cc.Empty, error) {
-	time.Sleep(5000 * time.Millisecond)
-
-	fmt.Println("Passing along")
 	s.Key = clientMessage.Key
 
 	// alter message
@@ -51,7 +50,11 @@ func (s *server) PassAlong(ctx context.Context, clientMessage *cc.ClientMessage)
 	queue = nil
 	queueLock.Unlock()
 
-	fmt.Println(clientMessage.Msg)
+	if clientMessage.Msg != lastMsg {
+		fmt.Println(clientMessage.Msg)
+	}
+	lastMsg = clientMessage.Msg
+
 
 	//Making client
 	var opts []grpc.DialOption
@@ -64,18 +67,19 @@ func (s *server) PassAlong(ctx context.Context, clientMessage *cc.ClientMessage)
 		log.Fatalf("Failed to dial: %v", err)
 	}
 
-	// close connection when function terminates
-	defer conn.Close()
 
 	// create client
 	client := cc.NewClientClient(conn)
 
 	newContext, _ := context.WithTimeout(context.Background(), 2000*time.Second)
 
-	client.PassAlong(newContext, clientMessage)
+	go func() {
+			// close connection when function terminates
+		defer conn.Close()
+		client.PassAlong(newContext, clientMessage)
+	}()
 
 	s.Key = 0
-	fmt.Println("Finished passalong")
 	return &cc.Empty{}, nil
 }
 
@@ -107,13 +111,11 @@ func main() {
 	cc.RegisterClientServer(grpcServer, s)
 
 	if startNode {
-		fmt.Println("Bool called correctly")
 		newContext, _ := context.WithTimeout(context.Background(), 2000*time.Second)
 		go s.PassAlong(newContext, &cc.ClientMessage{Key: s.Key, Msg: ""})
 	}
 
 	go QueueUp(port)
-	fmt.Println("Server should start now")
 	grpcServer.Serve(lis)
 	
 }
