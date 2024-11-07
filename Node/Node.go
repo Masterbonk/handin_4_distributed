@@ -38,6 +38,10 @@ func NewServer(startNode bool) *server {
 }
 
 func (s *server) PassAlong(ctx context.Context, clientMessage *cc.ClientMessage) (*cc.Empty, error) {
+	time.Sleep(5000 * time.Millisecond)
+
+	fmt.Println("Passing along")
+	s.Key = clientMessage.Key
 
 	// alter message
 	queueLock.Lock()
@@ -71,7 +75,7 @@ func (s *server) PassAlong(ctx context.Context, clientMessage *cc.ClientMessage)
 	client.PassAlong(newContext, clientMessage)
 
 	s.Key = 0
-
+	fmt.Println("Finished passalong")
 	return &cc.Empty{}, nil
 }
 
@@ -93,7 +97,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	} else {
-		log.Printf("Now listening to port: %d", port)
+		log.Printf("Now listening to port: %s", port)
 	}
 
 	grpcServer := grpc.NewServer()
@@ -101,23 +105,23 @@ func main() {
 	var s *server = NewServer(startNode)
 
 	cc.RegisterClientServer(grpcServer, s)
-	grpcServer.Serve(lis)
 
 	if startNode {
-		s.PassAlong(nil, &cc.ClientMessage{Key: s.Key, Msg: ""})
+		fmt.Println("Bool called correctly")
+		newContext, _ := context.WithTimeout(context.Background(), 2000*time.Second)
+		go s.PassAlong(newContext, &cc.ClientMessage{Key: s.Key, Msg: ""})
 	}
 
 	go QueueUp(port)
-
-	for {
-
-	}
+	fmt.Println("Server should start now")
+	grpcServer.Serve(lis)
+	
 }
 
 func QueueUp(port string) {
 	for {
 		// range is [3:4]
-		var delay int = 3 + rand.IntN(2)
+		var delay int = 5 + rand.IntN(5)
 		time.Sleep(time.Duration(delay) * time.Second)
 
 		queueLock.Lock()
