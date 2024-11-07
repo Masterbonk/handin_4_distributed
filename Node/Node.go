@@ -20,8 +20,13 @@ type server struct {
 	key int32
 }
 
-func newServer() *server {
-	s := &server{msg: "", key: 0}
+func newServer(startNode bool) *server {
+	var s *server
+	if startNode{
+		s = &server{msg: "", key: 737}
+	} else {
+		s = &server{msg: "", key: 0}
+	}
 	return s
 }
 
@@ -56,8 +61,10 @@ func main() {
 	var port string
 	flag.StringVar(&port, "p", "5050", "Sets the port of the node")
 
-	var targetPort string
 	flag.StringVar(&targetPort, "tp", "5051", "Sets the port of the target node")
+
+	var startNode bool
+	flag.BoolVar(&startNode, "s", false, "Determines if the node should start, once it's set up")
 	flag.Parse()
 
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%s", ip, port))
@@ -70,6 +77,10 @@ func main() {
 	
 
 	grpcServer := grpc.NewServer()
-	cc.RegisterClientServer(grpcServer, newServer())
+	cc.RegisterClientServer(grpcServer, newServer(startNode))
 	grpcServer.Serve(lis)
+
+	if startNode{
+		passAlong()
+	}
 }
